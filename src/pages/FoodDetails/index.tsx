@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useLayoutEffect,
 } from 'react';
-import { Image } from 'react-native';
+import { Image, Alert } from 'react-native';
 
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
@@ -55,7 +55,9 @@ interface Food {
   name: string;
   description: string;
   price: number;
+  category: number;
   image_url: string;
+  thumbnail_url: string;
   formattedPrice: string;
   extras: Extra[];
 }
@@ -73,38 +75,122 @@ const FoodDetails: React.FC = () => {
 
   useEffect(() => {
     async function loadFood(): Promise<void> {
-      // Load a specific food with extras based on routeParams id
+      const response = await api.get(`foods/${routeParams.id}`);
+      const formattedResponse = response.data;
+
+      setFood({
+        ...formattedResponse,
+        formattedPrice: formatValue(formattedResponse.price),
+      });
+
+      setExtras(
+        formattedResponse.extras.map((extra: Extra) => ({
+          ...extra,
+          quantity: 0,
+        })),
+      );
+
+      const getFavorite = await api.get('favorites');
+      const formattedFavorite = getFavorite.data.find(
+        (findFavorite: Food) => findFavorite.id === routeParams.id,
+      );
+
+      setIsFavorite(formattedFavorite);
     }
 
     loadFood();
   }, [routeParams]);
 
   function handleIncrementExtra(id: number): void {
-    // Increment extra quantity
+    setExtras(
+      extras.map(extra =>
+        extra.id === id
+          ? {
+              ...extra,
+              quantity: extra.quantity === 0 ? 1 : extra.quantity + 1,
+            }
+          : extra,
+      ),
+    );
   }
 
   function handleDecrementExtra(id: number): void {
-    // Decrement extra quantity
+    setExtras(
+      extras.map(extra =>
+        extra.id === id
+          ? {
+              ...extra,
+              quantity: extra.quantity > 0 ? extra.quantity - 1 : 0,
+            }
+          : extra,
+      ),
+    );
   }
 
   function handleIncrementFood(): void {
-    // Increment food quantity
+    setFoodQuantity(foodQuantity + 1);
   }
 
   function handleDecrementFood(): void {
-    // Decrement food quantity
+    if (foodQuantity === 1) return;
+
+    setFoodQuantity(foodQuantity - 1);
   }
 
-  const toggleFavorite = useCallback(() => {
-    // Toggle if food is favorite or not
-  }, [isFavorite, food]);
+  const toggleFavorite = useCallback(async () => {
+    if (isFavorite) {
+      await api.delete(`favorites/${routeParams.id}`);
+      setIsFavorite(false);
+    } else {
+      await api.post(`favorites/`, {
+        id: food.id,
+        name: food.name,
+        description: food.description,
+        price: food.price,
+        category: food.category,
+        image_url: food.image_url,
+        thumbnail_url: food.thumbnail_url,
+      });
+      setIsFavorite(true);
+    }
+  }, [isFavorite, routeParams.id, food]);
 
   const cartTotal = useMemo(() => {
-    // Calculate cartTotal
+    const totalExtras = extras.reduce(
+      (acc: number, extra: Extra) => acc + extra.quantity * extra.value,
+      0,
+    );
+
+    return formatValue(totalExtras + food.price * foodQuantity);
   }, [extras, food, foodQuantity]);
 
   async function handleFinishOrder(): Promise<void> {
-    // Finish the order and save on the API
+    const getOrders = await api.get('orders');
+
+    const lenghtOrders = getOrders.data.length;
+
+    const getOneOrder = getOrders.data.find(
+      (order: Food) => order.id === routeParams.id,
+    );
+
+    if (getOneOrder) {
+      Alert.alert('Alerta', 'O produto já se encontra na lista');
+    } else {
+      await api.post('orders', {
+        id: lenghtOrders > 0 ? lenghtOrders + 1 : 1,
+        ...{
+          product_id: food.id,
+          name: food.name,
+          description: food.description,
+          price: food.price,
+          category: food.category,
+          thumbnail_url: food.thumbnail_url,
+          extras,
+        },
+      });
+
+      Alert.alert('Sucesso', 'Pedido confirmado!');
+    }
   }
 
   // Calculate the correct icon name
