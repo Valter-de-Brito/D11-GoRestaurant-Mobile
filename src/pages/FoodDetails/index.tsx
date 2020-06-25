@@ -95,7 +95,7 @@ const FoodDetails: React.FC = () => {
         (findFavorite: Food) => findFavorite.id === routeParams.id,
       );
 
-      setIsFavorite(formattedFavorite);
+      setIsFavorite(!!formattedFavorite);
     }
 
     loadFood();
